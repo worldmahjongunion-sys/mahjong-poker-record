@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>麻雀・ポーカー成績記録</title>
+<style>
+  :root {
+    --felt: #0f5132;
+    --felt-dark: #0a3a24;
+    --gold: #d4af37;
+    --card-bg: #fbf7ee;
+    --ink: #2b2b2b;
+    --danger: #a83232;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Yu Gothic", "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(circle at top, var(--felt) 0%, var(--felt-dark) 100%);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  h1 {
+    color: var(--gold);
+    text-align: center;
+    font-size: 1.4rem;
+    letter-spacing: 0.05em;
+    margin: 8px 0 16px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid var(--gold);
+    background: var(--felt-dark);
+    color: var(--gold);
+    font-size: 0.95rem;
+    font-weight: bold;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn.active {
+    background: var(--gold);
+    color: var(--felt-dark);
+  }
+  .panel {
+    display: none;
+  }
+  .panel.active {
+    display: block;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    margin-top: 0;
+    font-size: 1.1rem;
+    color: var(--felt-dark);
+    border-bottom: 2px solid var(--gold);
+    padding-bottom: 6px;
+  }
+  label {
+    display: block;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    color: #555;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+    font-family: inherit;
+  }
+  textarea {
+    resize: vertical;
+  }
+  .submit-btn {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: bold;
+    background: var(--felt);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .submit-btn:active {
+    background: var(--felt-dark);
+  }
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-box {
+    flex: 1 1 28%;
+    min-width: 84px;
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .stat-box .num {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--felt-dark);
+  }
+  .stat-box .label {
+    font-size: 0.72rem;
+    color: #777;
+  }
+  .record-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .record-item {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .record-info {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .record-info .main-line {
+    font-weight: bold;
+  }
+  .record-info .sub-line {
+    color: #666;
+    font-size: 0.8rem;
+  }
+  .rank-badge {
+    display: inline-block;
+    min-width: 28px;
+    text-align: center;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    background: var(--gold);
+    color: var(--felt-dark);
+    margin-right: 6px;
+  }
+  .del-btn {
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .empty-msg {
+    color: #eee;
+    text-align: center;
+    padding: 20px;
+    font-size: 0.9rem;
+  }
+  .chip-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .chip {
+    padding: 7px 12px;
+    border-radius: 16px;
+    border: 1.5px solid var(--felt);
+    background: #fff;
+    color: var(--felt-dark);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .chip.selected {
+    background: var(--felt);
+    color: #fff;
+  }
+  .group-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    margin-bottom: 8px;
+  }
+  .group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: var(--felt-dark);
+    border-bottom: 1px solid var(--gold);
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+  }
+  .round-row {
+    padding: 6px 0;
+    border-bottom: 1px dashed #ddd;
+    font-size: 0.9rem;
+  }
+  .round-row:last-child {
+    border-bottom: none;
+  }
+  .round-row .del-btn {
+    margin-top: 6px;
+  }
+  .memo-line {
+    color: #7a5a00;
+    font-size: 0.8rem;
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .rank-preview {
+    margin-top: 10px;
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: var(--felt-dark);
+  }
+  .form-warning {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--danger);
+    min-height: 1.1em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>麻雀・ポーカー成績記録</h1>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-btn-mahjong" onclick="switchTab('mahjong')">麻雀</button>
+    <button class="tab-btn" id="tab-btn-poker" onclick="switchTab('poker')">ポーカー</button>
+    <button class="tab-btn" id="tab-btn-members" onclick="switchTab('members')">メンバー</button>
+  </div>
+
+  <!-- 麻雀パネル -->
+  <div class="panel active" id="panel-mahjong">
+    <div class="card">
+      <h2>麻雀の記録を追加</h2>
+      <form id="form-mahjong">
+        <label for="mj-date">日付</label>
+        <input type="date" id="mj-date" required>
+
+        <label for="mj-event">大会名</label>
+        <input type="text" id="mj-event" list="mj-event-list" placeholder="例：金曜フリー">
+        <datalist id="mj-event-list"></datalist>
+
+        <label for="mj-round">回戦番号</label>
+        <input type="number" id="mj-round" min="1" step="1" value="1" required>
+
+        <label>対戦相手（3人を選択）</label>
+        <div class="chip-container" id="mj-opponent-chips"></div>
+
+        <label for="mj-point">自分の最終ポイント（ウマオカ込み）</label>
+        <input type="number" id="mj-point" step="0.1" placeholder="例：-45.7" required>
+
+        <div id="mj-opponent-points"></div>
+
+        <div id="mj-rank-preview" class="rank-preview">現在の順位：-</div>
+        <div id="mj-form-warning" class="form-warning"></div>
+
+        <label for="mj-memo">メモ（役満・チョンボなど）</label>
+        <textarea id="mj-memo" rows="2" placeholder="自由に記入"></textarea>
+
+        <button type="submit" class="submit-btn">記録する</button>
+      </form>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="num" id="mj-stat-count">0</div>
+        <div class="label">記録数</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="mj-stat-avg-rank">-</div>
+        <div class="label">平均順位</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="mj-stat-avg-point">-</div>
+        <div class="label">平均ポイント</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="mj-stat-top-rate">-</div>
+        <div class="label">トップ率</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="mj-stat-rentai-rate">-</div>
+        <div class="label">連対率</div>
+      </div>
+    </div>
+
+    <div class="record-list" id="mj-list"></div>
+  </div>
+
+  <!-- ポーカーパネル -->
+  <div class="panel" id="panel-poker">
+    <div class="card">
+      <h2>ポーカーの記録を追加</h2>
+      <form id="form-poker">
+        <label for="pk-date">日付</label>
+        <input type="date" id="pk-date" required>
+
+        <label for="pk-event">大会名</label>
+        <input type="text" id="pk-event" list="pk-event-list" placeholder="例：週末トーナメント">
+        <datalist id="pk-event-list"></datalist>
+
+        <label for="pk-players">参加人数</label>
+        <input type="number" id="pk-players" min="1" step="1" placeholder="例：24" required>
+
+        <label for="pk-rank">順位</label>
+        <input type="number" id="pk-rank" min="1" step="1" placeholder="例：3" required>
+
+        <label for="pk-prize">プライズまたは得点ポイント</label>
+        <input type="text" id="pk-prize" placeholder="例：5000円 / 120pt">
+
+        <label for="pk-memo">メモ（特定のハンドなど）</label>
+        <textarea id="pk-memo" rows="2" placeholder="自由に記入"></textarea>
+
+        <button type="submit" class="submit-btn">記録する</button>
+      </form>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="num" id="pk-stat-count">0</div>
+        <div class="label">記録数</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="pk-stat-avg-rank">-</div>
+        <div class="label">平均順位</div>
+      </div>
+    </div>
+
+    <div class="record-list" id="pk-list"></div>
+  </div>
+
+  <!-- メンバーパネル -->
+  <div class="panel" id="panel-members">
+    <div class="card">
+      <h2>メンバーを登録</h2>
+      <form id="form-member">
+        <label for="member-name">名前</label>
+        <input type="text" id="member-name" placeholder="例：山田さん" required>
+        <button type="submit" class="submit-btn">追加する</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>登録メンバー一覧</h2>
+      <div class="record-list" id="member-list"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="opponent-stats-heading">対戦相手別の成績（麻雀）</h2>
+      <label for="opponent-stats-select">メンバーを選択</label>
+      <select id="opponent-stats-select">
+        <option value="">選択してください</option>
+      </select>
+      <div class="stats" style="margin-top:12px;">
+        <div class="stat-box">
+          <div class="num" id="ops-count">-</div>
+          <div class="label">対局数</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" id="ops-avg-rank">-</div>
+          <div class="label">平均順位</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" id="ops-top-rate">-</div>
+          <div class="label">トップ率</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" id="ops-rentai-rate">-</div>
+          <div class="label">連対率</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY_MJ = 'mahjongPokerRecord_mahjong';
+  const STORAGE_KEY_PK = 'mahjongPokerRecord_poker';
+  const STORAGE_KEY_MEMBERS = 'mahjongPokerRecord_members';
+
+  function loadRecords(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveRecords(key, records) {
+    localStorage.setItem(key, JSON.stringify(records));
+  }
+
+  let mjRecords = loadRecords(STORAGE_KEY_MJ);
+  let pkRecords = loadRecords(STORAGE_KEY_PK);
+  let members = loadRecords(STORAGE_KEY_MEMBERS);
+  let mjSelectedOpponents = new Set();
+  let mjOpponentPoints = {};
+
+  // Date.now()だけだと同一ミリ秒内の連続追加でidが重複し、
+  // 別人のチップが同じdata-idを持って連動選択されるバグの原因になるため、
+  // 常に増加するユニークなidを発行する
+  let lastIssuedId = 0;
+  function generateId() {
+    let id = Date.now();
+    if (id <= lastIssuedId) id = lastIssuedId + 1;
+    lastIssuedId = id;
+    return id;
+  }
+
+  // 過去にDate.now()の同一ミリ秒衝突で重複idを持ってしまったメンバーをid採番し直す移行処理。
+  // メンバーは全員別人なので誰も除去せず、重複していた全員に新しいidを振り直す。
+  // 麻雀記録のopponents配列に入っている旧idは、どのメンバーを指すか特定できないため
+  // 重複グループ内で最初に見つかったメンバーの新idに寄せる。
+  function migrateDuplicateMemberIds() {
+    const idCounts = {};
+    members.forEach(m => { idCounts[m.id] = (idCounts[m.id] || 0) + 1; });
+    const duplicateIds = Object.keys(idCounts).map(Number).filter(id => idCounts[id] > 1);
+    if (duplicateIds.length === 0) return;
+
+    const idMap = {};
+    duplicateIds.forEach(oldId => {
+      let isFirst = true;
+      members.forEach(m => {
+        if (m.id !== oldId) return;
+        const newId = generateId();
+        if (isFirst) {
+          idMap[oldId] = newId;
+          isFirst = false;
+        }
+        m.id = newId;
+      });
+    });
+
+    mjRecords.forEach(r => {
+      if (Array.isArray(r.opponents)) {
+        r.opponents = r.opponents.map(id => idMap[id] !== undefined ? idMap[id] : id);
+      }
+    });
+
+    saveMembers();
+    saveRecords(STORAGE_KEY_MJ, mjRecords);
+  }
+
+  function switchTab(tab) {
+    ['mahjong', 'poker', 'members'].forEach(t => {
+      document.getElementById('tab-btn-' + t).classList.toggle('active', t === tab);
+      document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+    });
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d)) return dateStr;
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  function updateEventDatalist(records, listEl) {
+    const names = [...new Set(records.map(r => r.event).filter(Boolean))];
+    listEl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : str;
+    return div.innerHTML;
+  }
+
+  // ---------- メンバー ----------
+
+  function saveMembers() {
+    saveRecords(STORAGE_KEY_MEMBERS, members);
+  }
+
+  function renderMembers() {
+    const listEl = document.getElementById('member-list');
+    if (members.length === 0) {
+      listEl.innerHTML = '<div class="empty-msg">まだメンバーがいません</div>';
+    } else {
+      listEl.innerHTML = members.map(m => `
+        <div class="record-item">
+          <div class="record-info"><div class="main-line">${escapeHtml(m.name)}</div></div>
+          <button class="del-btn" onclick="deleteMember(${m.id})">削除</button>
+        </div>
+      `).join('');
+    }
+
+    const select = document.getElementById('opponent-stats-select');
+    const prevVal = select.value;
+    select.innerHTML = '<option value="">選択してください</option>' +
+      members.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+    if (members.some(m => String(m.id) === prevVal)) select.value = prevVal;
+
+    renderOpponentChips();
+    renderOpponentPointInputs();
+  }
+
+  function addMember(name) {
+    members.push({ id: generateId(), name });
+    saveMembers();
+    renderMembers();
+  }
+
+  function deleteMember(id) {
+    members = members.filter(m => m.id !== id);
+    saveMembers();
+    mjSelectedOpponents.delete(id);
+    delete mjOpponentPoints[id];
+    renderMembers();
+  }
+
+  document.getElementById('form-member').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const nameInput = document.getElementById('member-name');
+    const name = nameInput.value.trim();
+    if (!name) return;
+    addMember(name);
+    nameInput.value = '';
+  });
+
+  document.getElementById('opponent-stats-select').addEventListener('change', function () {
+    const id = this.value ? Number(this.value) : null;
+    const headingEl = document.getElementById('opponent-stats-heading');
+    const countEl = document.getElementById('ops-count');
+    const avgRankEl = document.getElementById('ops-avg-rank');
+    const topRateEl = document.getElementById('ops-top-rate');
+    const rentaiRateEl = document.getElementById('ops-rentai-rate');
+
+    if (!id) {
+      headingEl.textContent = '対戦相手別の成績（麻雀）';
+      countEl.textContent = '-';
+      avgRankEl.textContent = '-';
+      topRateEl.textContent = '-';
+      rentaiRateEl.textContent = '-';
+      return;
+    }
+
+    const member = members.find(m => m.id === id);
+    headingEl.textContent = member.name + 'さんと同卓したときの自分の成績';
+
+    const matches = mjRecords.filter(r => (r.opponents || []).includes(id));
+    countEl.textContent = matches.length;
+    if (matches.length > 0) {
+      const avgRank = matches.reduce((s, r) => s + r.rank, 0) / matches.length;
+      const topRate = matches.filter(r => r.rank === 1).length / matches.length * 100;
+      const rentaiRate = matches.filter(r => r.rank === 1 || r.rank === 2).length / matches.length * 100;
+      avgRankEl.textContent = avgRank.toFixed(2);
+      topRateEl.textContent = topRate.toFixed(1) + '%';
+      rentaiRateEl.textContent = rentaiRate.toFixed(1) + '%';
+    } else {
+      avgRankEl.textContent = '-';
+      topRateEl.textContent = '-';
+      rentaiRateEl.textContent = '-';
+    }
+  });
+
+  // ---------- 麻雀：対戦相手チップ・点数入力・順位自動判定 ----------
+
+  function renderOpponentChips() {
+    const container = document.getElementById('mj-opponent-chips');
+    if (members.length === 0) {
+      container.innerHTML = '<div class="empty-msg" style="padding:6px;color:#888;">「メンバー」タブで登録してください</div>';
+      return;
+    }
+    container.innerHTML = members.map(m => `
+      <button type="button" class="chip ${mjSelectedOpponents.has(m.id) ? 'selected' : ''}" data-id="${m.id}" onclick="toggleOpponent(${m.id})">${escapeHtml(m.name)}</button>
+    `).join('');
+  }
+
+  function toggleOpponent(id) {
+    if (mjSelectedOpponents.has(id)) {
+      mjSelectedOpponents.delete(id);
+      delete mjOpponentPoints[id];
+    } else {
+      if (mjSelectedOpponents.size >= 3) return;
+      mjSelectedOpponents.add(id);
+    }
+    renderOpponentChips();
+    renderOpponentPointInputs();
+  }
+
+  function renderOpponentPointInputs() {
+    const container = document.getElementById('mj-opponent-points');
+    const ids = [...mjSelectedOpponents];
+    container.innerHTML = ids.map(id => {
+      const m = members.find(mm => mm.id === id);
+      const name = m ? m.name : '';
+      const val = mjOpponentPoints[id] !== undefined ? mjOpponentPoints[id] : '';
+      return `
+        <label for="mj-opp-point-${id}">${escapeHtml(name)}さんの最終ポイント（ウマオカ込み）</label>
+        <input type="number" step="0.1" id="mj-opp-point-${id}" data-opponent-id="${id}" value="${escapeHtml(val)}" placeholder="例：-20.5">
+      `;
+    }).join('');
+    ids.forEach(id => {
+      const el = document.getElementById('mj-opp-point-' + id);
+      el.addEventListener('input', function () {
+        mjOpponentPoints[id] = el.value;
+        updateRankPreview();
+      });
+    });
+    updateRankPreview();
+  }
+
+  // 自分と対戦相手3人ぶんの最終ポイント（ウマオカ込み）から、同点は同順位（次の順位を飛ばす）方式で順位を算出する
+  function getCurrentScores() {
+    const ids = [...mjSelectedOpponents];
+    if (ids.length !== 3) {
+      return { ready: false, message: `対戦相手を3人選択してください（現在${ids.length}人）` };
+    }
+    const selfVal = document.getElementById('mj-point').value;
+    if (selfVal === '') {
+      return { ready: false, message: '自分の最終ポイントを入力してください' };
+    }
+    const oppVals = ids.map(id => mjOpponentPoints[id]);
+    if (oppVals.some(v => v === undefined || v === '')) {
+      return { ready: false, message: '対戦相手全員の最終ポイントを入力してください' };
+    }
+    const selfPoint = parseFloat(selfVal);
+    const opponentPoints = oppVals.map(v => parseFloat(v));
+    if (Number.isNaN(selfPoint) || opponentPoints.some(v => Number.isNaN(v))) {
+      return { ready: false, message: 'ポイントの入力が正しくありません' };
+    }
+    const allPoints = [selfPoint, ...opponentPoints];
+    const rank = allPoints.filter(v => v > selfPoint).length + 1;
+    return { ready: true, selfPoint, opponentIds: ids, opponentPoints, rank };
+  }
+
+  function updateRankPreview() {
+    const previewEl = document.getElementById('mj-rank-preview');
+    const warnEl = document.getElementById('mj-form-warning');
+    const result = getCurrentScores();
+    if (result.ready) {
+      previewEl.textContent = `現在の順位：${result.rank}位`;
+      warnEl.textContent = '';
+    } else {
+      previewEl.textContent = '現在の順位：-';
+      warnEl.textContent = result.message;
+    }
+  }
+
+  // ---------- 麻雀：一覧・集計 ----------
+
+  function groupMahjongRecords(records) {
+    const groups = {};
+    records.forEach(r => {
+      const key = (r.date || '') + '｜' + (r.event || '');
+      if (!groups[key]) groups[key] = { date: r.date, event: r.event, items: [] };
+      groups[key].items.push(r);
+    });
+    const groupArr = Object.values(groups);
+    groupArr.forEach(g => {
+      g.items.sort((a, b) => (a.round || 1) - (b.round || 1) || a.id - b.id);
+    });
+    groupArr.sort((a, b) => {
+      const dateCompare = (b.date || '').localeCompare(a.date || '');
+      if (dateCompare !== 0) return dateCompare;
+      const aMaxId = Math.max(...a.items.map(i => i.id));
+      const bMaxId = Math.max(...b.items.map(i => i.id));
+      return bMaxId - aMaxId;
+    });
+    return groupArr;
+  }
+
+  function renderMahjong() {
+    const listEl = document.getElementById('mj-list');
+    const groups = groupMahjongRecords(mjRecords);
+
+    if (groups.length === 0) {
+      listEl.innerHTML = '<div class="empty-msg">まだ記録がありません</div>';
+    } else {
+      listEl.innerHTML = groups.map(g => {
+        const total = g.items.reduce((s, r) => s + r.point, 0);
+        const avgRank = g.items.reduce((s, r) => s + r.rank, 0) / g.items.length;
+        const itemsHtml = g.items.map(r => {
+          const oppNames = (r.opponents || [])
+            .map(id => {
+              const m = members.find(mm => mm.id === id);
+              return m ? m.name : null;
+            })
+            .filter(Boolean);
+          return `
+            <div class="round-row">
+              <div class="main-line"><span class="rank-badge">${r.rank}位</span>第${r.round || 1}回戦　${r.point >= 0 ? '+' : ''}${r.point}pt</div>
+              ${oppNames.length ? `<div class="sub-line">対戦相手：${oppNames.map(n => escapeHtml(n)).join('、')}</div>` : ''}
+              ${r.memo ? `<div class="memo-line">${escapeHtml(r.memo)}</div>` : ''}
+              <button class="del-btn" onclick="deleteMahjong(${r.id})">削除</button>
+            </div>
+          `;
+        }).join('');
+        return `
+          <div class="group-card">
+            <div class="group-header">
+              <span>${formatDate(g.date)}　${escapeHtml(g.event || '（大会名なし）')}</span>
+              <span>計 ${total >= 0 ? '+' : ''}${total.toFixed(1)}pt ／ 平均${avgRank.toFixed(2)}位</span>
+            </div>
+            ${itemsHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    document.getElementById('mj-stat-count').textContent = mjRecords.length;
+    if (mjRecords.length > 0) {
+      const avgRank = mjRecords.reduce((s, r) => s + r.rank, 0) / mjRecords.length;
+      const avgPoint = mjRecords.reduce((s, r) => s + r.point, 0) / mjRecords.length;
+      const topRate = mjRecords.filter(r => r.rank === 1).length / mjRecords.length * 100;
+      const rentaiRate = mjRecords.filter(r => r.rank === 1 || r.rank === 2).length / mjRecords.length * 100;
+      document.getElementById('mj-stat-avg-rank').textContent = avgRank.toFixed(2);
+      document.getElementById('mj-stat-avg-point').textContent = (avgPoint >= 0 ? '+' : '') + avgPoint.toFixed(1);
+      document.getElementById('mj-stat-top-rate').textContent = topRate.toFixed(1) + '%';
+      document.getElementById('mj-stat-rentai-rate').textContent = rentaiRate.toFixed(1) + '%';
+    } else {
+      document.getElementById('mj-stat-avg-rank').textContent = '-';
+      document.getElementById('mj-stat-avg-point').textContent = '-';
+      document.getElementById('mj-stat-top-rate').textContent = '-';
+      document.getElementById('mj-stat-rentai-rate').textContent = '-';
+    }
+
+    updateEventDatalist(mjRecords, document.getElementById('mj-event-list'));
+  }
+
+  function renderPoker() {
+    const listEl = document.getElementById('pk-list');
+    const sorted = [...pkRecords].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+
+    if (sorted.length === 0) {
+      listEl.innerHTML = '<div class="empty-msg">まだ記録がありません</div>';
+    } else {
+      listEl.innerHTML = sorted.map(r => `
+        <div class="record-item">
+          <div class="record-info">
+            <div class="main-line"><span class="rank-badge">${r.rank}位</span>${formatDate(r.date)}（${r.players}人参加）</div>
+            <div class="sub-line">${escapeHtml(r.event || '（大会名なし）')}${r.prize ? ' ／ ' + escapeHtml(r.prize) : ''}</div>
+            ${r.memo ? `<div class="memo-line">${escapeHtml(r.memo)}</div>` : ''}
+          </div>
+          <button class="del-btn" onclick="deletePoker(${r.id})">削除</button>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('pk-stat-count').textContent = pkRecords.length;
+    if (pkRecords.length > 0) {
+      const avgRank = pkRecords.reduce((s, r) => s + r.rank, 0) / pkRecords.length;
+      document.getElementById('pk-stat-avg-rank').textContent = avgRank.toFixed(2);
+    } else {
+      document.getElementById('pk-stat-avg-rank').textContent = '-';
+    }
+
+    updateEventDatalist(pkRecords, document.getElementById('pk-event-list'));
+  }
+
+  function deleteMahjong(id) {
+    mjRecords = mjRecords.filter(r => r.id !== id);
+    saveRecords(STORAGE_KEY_MJ, mjRecords);
+    renderMahjong();
+  }
+
+  function deletePoker(id) {
+    pkRecords = pkRecords.filter(r => r.id !== id);
+    saveRecords(STORAGE_KEY_PK, pkRecords);
+    renderPoker();
+  }
+
+  document.getElementById('mj-point').addEventListener('input', updateRankPreview);
+
+  document.getElementById('form-mahjong').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date = document.getElementById('mj-date').value;
+    const event = document.getElementById('mj-event').value.trim();
+    const round = parseInt(document.getElementById('mj-round').value, 10) || 1;
+    const memo = document.getElementById('mj-memo').value.trim();
+    if (!date) return;
+
+    const result = getCurrentScores();
+    if (!result.ready) {
+      updateRankPreview();
+      return;
+    }
+
+    mjRecords.push({
+      id: generateId(),
+      date, event, round,
+      rank: result.rank,
+      point: result.selfPoint,
+      opponents: result.opponentIds,
+      opponentPoints: result.opponentPoints,
+      memo
+    });
+    saveRecords(STORAGE_KEY_MJ, mjRecords);
+
+    // 日付・大会名・対戦相手は次の回戦のために残し、回戦番号と点数だけリセットする
+    document.getElementById('mj-round').value = round + 1;
+    document.getElementById('mj-point').value = '';
+    document.getElementById('mj-memo').value = '';
+    mjOpponentPoints = {};
+    renderOpponentPointInputs();
+
+    renderMahjong();
+  });
+
+  document.getElementById('form-poker').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date = document.getElementById('pk-date').value;
+    const event = document.getElementById('pk-event').value.trim();
+    const players = parseInt(document.getElementById('pk-players').value, 10);
+    const rank = parseInt(document.getElementById('pk-rank').value, 10);
+    const prize = document.getElementById('pk-prize').value.trim();
+    const memo = document.getElementById('pk-memo').value.trim();
+    if (!date || !players || !rank) return;
+
+    pkRecords.push({ id: generateId(), date, event, players, rank, prize, memo });
+    saveRecords(STORAGE_KEY_PK, pkRecords);
+    this.reset();
+    renderPoker();
+  });
+
+  migrateDuplicateMemberIds();
+  renderMembers();
+  renderMahjong();
+  renderPoker();
+</script>
+</body>
+</html>
