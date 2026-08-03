@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>麻雀・ポーカー成績記録</title>
+<style>
+  :root {
+    --felt: #0f5132;
+    --felt-dark: #0a3a24;
+    --gold: #d4af37;
+    --card-bg: #fbf7ee;
+    --ink: #2b2b2b;
+    --danger: #a83232;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Yu Gothic", "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(circle at top, var(--felt) 0%, var(--felt-dark) 100%);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  h1 {
+    color: var(--gold);
+    text-align: center;
+    font-size: 1.4rem;
+    letter-spacing: 0.05em;
+    margin: 8px 0 16px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid var(--gold);
+    background: var(--felt-dark);
+    color: var(--gold);
+    font-size: 1rem;
+    font-weight: bold;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn.active {
+    background: var(--gold);
+    color: var(--felt-dark);
+  }
+  .panel {
+    display: none;
+  }
+  .panel.active {
+    display: block;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    margin-top: 0;
+    font-size: 1.1rem;
+    color: var(--felt-dark);
+    border-bottom: 2px solid var(--gold);
+    padding-bottom: 6px;
+  }
+  label {
+    display: block;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    color: #555;
+  }
+  input, select {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .submit-btn {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: bold;
+    background: var(--felt);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .submit-btn:active {
+    background: var(--felt-dark);
+  }
+  .stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .stat-box {
+    flex: 1;
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .stat-box .num {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--felt-dark);
+  }
+  .stat-box .label {
+    font-size: 0.75rem;
+    color: #777;
+  }
+  .record-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .record-item {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .record-info {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .record-info .main-line {
+    font-weight: bold;
+  }
+  .record-info .sub-line {
+    color: #666;
+    font-size: 0.8rem;
+  }
+  .rank-badge {
+    display: inline-block;
+    min-width: 28px;
+    text-align: center;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    background: var(--gold);
+    color: var(--felt-dark);
+    margin-right: 6px;
+  }
+  .del-btn {
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .empty-msg {
+    color: #eee;
+    text-align: center;
+    padding: 20px;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>麻雀・ポーカー成績記録</h1>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-btn-mahjong" onclick="switchTab('mahjong')">麻雀</button>
+    <button class="tab-btn" id="tab-btn-poker" onclick="switchTab('poker')">ポーカー</button>
+  </div>
+
+  <!-- 麻雀パネル -->
+  <div class="panel active" id="panel-mahjong">
+    <div class="card">
+      <h2>麻雀の記録を追加</h2>
+      <form id="form-mahjong">
+        <label for="mj-date">日付</label>
+        <input type="date" id="mj-date" required>
+
+        <label for="mj-event">大会名</label>
+        <input type="text" id="mj-event" list="mj-event-list" placeholder="例：金曜フリー">
+        <datalist id="mj-event-list"></datalist>
+
+        <label for="mj-rank">順位</label>
+        <select id="mj-rank" required>
+          <option value="">選択してください</option>
+          <option value="1">1位</option>
+          <option value="2">2位</option>
+          <option value="3">3位</option>
+          <option value="4">4位</option>
+        </select>
+
+        <label for="mj-point">最終ポイント（ウマオカ込み）</label>
+        <input type="number" id="mj-point" step="0.1" placeholder="例：-45.7" required>
+
+        <button type="submit" class="submit-btn">記録する</button>
+      </form>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="num" id="mj-stat-count">0</div>
+        <div class="label">記録数</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="mj-stat-avg-rank">-</div>
+        <div class="label">平均順位</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="mj-stat-avg-point">-</div>
+        <div class="label">平均ポイント</div>
+      </div>
+    </div>
+
+    <div class="record-list" id="mj-list"></div>
+  </div>
+
+  <!-- ポーカーパネル -->
+  <div class="panel" id="panel-poker">
+    <div class="card">
+      <h2>ポーカーの記録を追加</h2>
+      <form id="form-poker">
+        <label for="pk-date">日付</label>
+        <input type="date" id="pk-date" required>
+
+        <label for="pk-event">大会名</label>
+        <input type="text" id="pk-event" list="pk-event-list" placeholder="例：週末トーナメント">
+        <datalist id="pk-event-list"></datalist>
+
+        <label for="pk-players">参加人数</label>
+        <input type="number" id="pk-players" min="1" step="1" placeholder="例：24" required>
+
+        <label for="pk-rank">順位</label>
+        <input type="number" id="pk-rank" min="1" step="1" placeholder="例：3" required>
+
+        <label for="pk-prize">プライズまたは得点ポイント</label>
+        <input type="text" id="pk-prize" placeholder="例：5000円 / 120pt">
+
+        <button type="submit" class="submit-btn">記録する</button>
+      </form>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="num" id="pk-stat-count">0</div>
+        <div class="label">記録数</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="pk-stat-avg-rank">-</div>
+        <div class="label">平均順位</div>
+      </div>
+    </div>
+
+    <div class="record-list" id="pk-list"></div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY_MJ = 'mahjongPokerRecord_mahjong';
+  const STORAGE_KEY_PK = 'mahjongPokerRecord_poker';
+
+  function loadRecords(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveRecords(key, records) {
+    localStorage.setItem(key, JSON.stringify(records));
+  }
+
+  let mjRecords = loadRecords(STORAGE_KEY_MJ);
+  let pkRecords = loadRecords(STORAGE_KEY_PK);
+
+  function switchTab(tab) {
+    document.getElementById('tab-btn-mahjong').classList.toggle('active', tab === 'mahjong');
+    document.getElementById('tab-btn-poker').classList.toggle('active', tab === 'poker');
+    document.getElementById('panel-mahjong').classList.toggle('active', tab === 'mahjong');
+    document.getElementById('panel-poker').classList.toggle('active', tab === 'poker');
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d)) return dateStr;
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  function updateEventDatalist(records, listEl) {
+    const names = [...new Set(records.map(r => r.event).filter(Boolean))];
+    listEl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function renderMahjong() {
+    const listEl = document.getElementById('mj-list');
+    const sorted = [...mjRecords].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+
+    if (sorted.length === 0) {
+      listEl.innerHTML = '<div class="empty-msg">まだ記録がありません</div>';
+    } else {
+      listEl.innerHTML = sorted.map(r => `
+        <div class="record-item">
+          <div class="record-info">
+            <div class="main-line"><span class="rank-badge">${r.rank}位</span>${formatDate(r.date)} ${r.point >= 0 ? '+' : ''}${r.point}pt</div>
+            <div class="sub-line">${escapeHtml(r.event || '（大会名なし）')}</div>
+          </div>
+          <button class="del-btn" onclick="deleteMahjong(${r.id})">削除</button>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('mj-stat-count').textContent = mjRecords.length;
+    if (mjRecords.length > 0) {
+      const avgRank = mjRecords.reduce((s, r) => s + r.rank, 0) / mjRecords.length;
+      const avgPoint = mjRecords.reduce((s, r) => s + r.point, 0) / mjRecords.length;
+      document.getElementById('mj-stat-avg-rank').textContent = avgRank.toFixed(2);
+      document.getElementById('mj-stat-avg-point').textContent = (avgPoint >= 0 ? '+' : '') + avgPoint.toFixed(1);
+    } else {
+      document.getElementById('mj-stat-avg-rank').textContent = '-';
+      document.getElementById('mj-stat-avg-point').textContent = '-';
+    }
+
+    updateEventDatalist(mjRecords, document.getElementById('mj-event-list'));
+  }
+
+  function renderPoker() {
+    const listEl = document.getElementById('pk-list');
+    const sorted = [...pkRecords].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+
+    if (sorted.length === 0) {
+      listEl.innerHTML = '<div class="empty-msg">まだ記録がありません</div>';
+    } else {
+      listEl.innerHTML = sorted.map(r => `
+        <div class="record-item">
+          <div class="record-info">
+            <div class="main-line"><span class="rank-badge">${r.rank}位</span>${formatDate(r.date)}（${r.players}人参加）</div>
+            <div class="sub-line">${escapeHtml(r.event || '（大会名なし）')}${r.prize ? ' ／ ' + escapeHtml(r.prize) : ''}</div>
+          </div>
+          <button class="del-btn" onclick="deletePoker(${r.id})">削除</button>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('pk-stat-count').textContent = pkRecords.length;
+    if (pkRecords.length > 0) {
+      const avgRank = pkRecords.reduce((s, r) => s + r.rank, 0) / pkRecords.length;
+      document.getElementById('pk-stat-avg-rank').textContent = avgRank.toFixed(2);
+    } else {
+      document.getElementById('pk-stat-avg-rank').textContent = '-';
+    }
+
+    updateEventDatalist(pkRecords, document.getElementById('pk-event-list'));
+  }
+
+  function deleteMahjong(id) {
+    mjRecords = mjRecords.filter(r => r.id !== id);
+    saveRecords(STORAGE_KEY_MJ, mjRecords);
+    renderMahjong();
+  }
+
+  function deletePoker(id) {
+    pkRecords = pkRecords.filter(r => r.id !== id);
+    saveRecords(STORAGE_KEY_PK, pkRecords);
+    renderPoker();
+  }
+
+  document.getElementById('form-mahjong').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date = document.getElementById('mj-date').value;
+    const event = document.getElementById('mj-event').value.trim();
+    const rank = parseInt(document.getElementById('mj-rank').value, 10);
+    const pointVal = document.getElementById('mj-point').value;
+    if (!date || !rank || pointVal === '') return;
+    const point = parseFloat(pointVal);
+
+    mjRecords.push({ id: Date.now(), date, event, rank, point });
+    saveRecords(STORAGE_KEY_MJ, mjRecords);
+    this.reset();
+    renderMahjong();
+  });
+
+  document.getElementById('form-poker').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date = document.getElementById('pk-date').value;
+    const event = document.getElementById('pk-event').value.trim();
+    const players = parseInt(document.getElementById('pk-players').value, 10);
+    const rank = parseInt(document.getElementById('pk-rank').value, 10);
+    const prize = document.getElementById('pk-prize').value.trim();
+    if (!date || !players || !rank) return;
+
+    pkRecords.push({ id: Date.now(), date, event, players, rank, prize });
+    saveRecords(STORAGE_KEY_PK, pkRecords);
+    this.reset();
+    renderPoker();
+  });
+
+  renderMahjong();
+  renderPoker();
+</script>
+</body>
+</html>
