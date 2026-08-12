@@ -257,6 +257,78 @@
     color: var(--danger);
     min-height: 1.1em;
   }
+  .search-box {
+    margin-bottom: 12px;
+  }
+  .search-info {
+    font-size: 0.78rem;
+    color: #eee;
+    padding: 0 2px;
+    min-height: 1.1em;
+  }
+  .point-sum {
+    margin-top: 8px;
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: var(--felt);
+  }
+  .point-sum.point-sum-warn {
+    color: var(--danger);
+  }
+  .point-sum-note {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 2px;
+  }
+  .sort-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .compat-good {
+    color: #1d4ed8;
+  }
+  .compat-bad {
+    color: #b91c1c;
+  }
+  .chip.compat-good {
+    color: #1d4ed8;
+    border-color: #1d4ed8;
+  }
+  .chip.compat-bad {
+    color: #b91c1c;
+    border-color: #b91c1c;
+  }
+  .chip.selected.compat-good,
+  .chip.selected.compat-bad {
+    color: #fff;
+  }
+  .point-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .point-input-row input {
+    flex: 1;
+  }
+  .sign-btn {
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .sign-btn.sign-btn-active {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+  }
 </style>
 </head>
 <body>
@@ -281,6 +353,18 @@
         <input type="text" id="mj-event" list="mj-event-list" placeholder="例：金曜フリー">
         <datalist id="mj-event-list"></datalist>
 
+        <label>会場</label>
+        <div class="chip-container" id="mj-venue-chips"></div>
+
+        <label for="mj-tour-type">大会種別</label>
+        <select id="mj-tour-type">
+          <option value="">選択してください</option>
+          <option value="リーグ戦">リーグ戦</option>
+          <option value="ワンデー">ワンデー</option>
+          <option value="セット">セット</option>
+          <option value="オンライン">オンライン</option>
+        </select>
+
         <label for="mj-round">回戦番号</label>
         <input type="number" id="mj-round" min="1" step="1" value="1" required>
 
@@ -288,11 +372,16 @@
         <div class="chip-container" id="mj-opponent-chips"></div>
 
         <label for="mj-point">自分の最終ポイント（ウマオカ込み）</label>
-        <input type="number" id="mj-point" step="0.1" placeholder="例：-45.7" required>
+        <div class="point-input-row">
+          <button type="button" class="sign-btn" id="mj-point-sign-btn" aria-label="符号を反転" onclick="toggleMjPointSign()">±</button>
+          <input type="text" inputmode="decimal" id="mj-point" placeholder="例：-45.7" required>
+        </div>
 
         <div id="mj-opponent-points"></div>
 
         <div id="mj-rank-preview" class="rank-preview">現在の順位：-</div>
+        <div id="mj-point-sum" class="point-sum">合計：0.0</div>
+        <div id="mj-point-sum-note" class="point-sum-note" style="display:none;">供託が残った場合を除き、通常は0になります</div>
         <div id="mj-form-warning" class="form-warning"></div>
 
         <label for="mj-memo">メモ（役満・チョンボなど）</label>
@@ -325,6 +414,18 @@
       </div>
     </div>
 
+    <div class="search-box">
+      <input type="text" id="mj-search" placeholder="キーワードで検索（大会名・会場・大会種別・メモ・対戦相手）">
+      <div class="search-info" id="mj-search-info"></div>
+    </div>
+
+    <div class="sort-bar" id="mj-sort-bar">
+      <button type="button" class="chip" data-sort="date-desc" onclick="setMjSort('date-desc')">新しい順</button>
+      <button type="button" class="chip" data-sort="date-asc" onclick="setMjSort('date-asc')">古い順</button>
+      <button type="button" class="chip" data-sort="point-desc" onclick="setMjSort('point-desc')">ポイントが高い順</button>
+      <button type="button" class="chip" data-sort="point-asc" onclick="setMjSort('point-asc')">ポイントが低い順</button>
+    </div>
+
     <div class="record-list" id="mj-list"></div>
   </div>
 
@@ -339,6 +440,20 @@
         <label for="pk-event">大会名</label>
         <input type="text" id="pk-event" list="pk-event-list" placeholder="例：週末トーナメント">
         <datalist id="pk-event-list"></datalist>
+
+        <label>会場</label>
+        <div class="chip-container" id="pk-venue-chips"></div>
+
+        <label for="pk-format">形式</label>
+        <select id="pk-format">
+          <option value="">選択してください</option>
+          <option value="MTT">MTT</option>
+          <option value="SNG">SNG</option>
+          <option value="リング">リング</option>
+        </select>
+
+        <label for="pk-buyin">バイイン</label>
+        <input type="number" id="pk-buyin" min="0" step="1" placeholder="例：5000">
 
         <label for="pk-players">参加人数</label>
         <input type="number" id="pk-players" min="1" step="1" placeholder="例：24" required>
@@ -367,6 +482,17 @@
       </div>
     </div>
 
+    <div class="search-box">
+      <input type="text" id="pk-search" placeholder="キーワードで検索（大会名・会場・形式・メモ）">
+      <div class="search-info" id="pk-search-info"></div>
+    </div>
+
+    <div class="sort-bar" id="pk-sort-bar">
+      <button type="button" class="chip" data-sort="date-desc" onclick="setPkSort('date-desc')">新しい順</button>
+      <button type="button" class="chip" data-sort="date-asc" onclick="setPkSort('date-asc')">古い順</button>
+      <button type="button" class="chip" data-sort="prize-desc" onclick="setPkSort('prize-desc')">プライズが高い順</button>
+    </div>
+
     <div class="record-list" id="pk-list"></div>
   </div>
 
@@ -384,6 +510,20 @@
     <div class="card">
       <h2>登録メンバー一覧</h2>
       <div class="record-list" id="member-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>会場を登録</h2>
+      <form id="form-venue">
+        <label for="venue-name">会場名</label>
+        <input type="text" id="venue-name" placeholder="例：雀荘サンライズ" required>
+        <button type="submit" class="submit-btn">追加する</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>登録会場一覧</h2>
+      <div class="record-list" id="venue-list"></div>
     </div>
 
     <div class="card">
@@ -418,6 +558,7 @@
   const STORAGE_KEY_MJ = 'mahjongPokerRecord_mahjong';
   const STORAGE_KEY_PK = 'mahjongPokerRecord_poker';
   const STORAGE_KEY_MEMBERS = 'mahjongPokerRecord_members';
+  const STORAGE_KEY_VENUES = 'mahjongPokerRecord_venues';
 
   function loadRecords(key) {
     try {
@@ -435,8 +576,13 @@
   let mjRecords = loadRecords(STORAGE_KEY_MJ);
   let pkRecords = loadRecords(STORAGE_KEY_PK);
   let members = loadRecords(STORAGE_KEY_MEMBERS);
+  let venues = loadRecords(STORAGE_KEY_VENUES);
   let mjSelectedOpponents = new Set();
   let mjOpponentPoints = {};
+  let mjSelectedVenue = null;
+  let pkSelectedVenue = null;
+  let mjSortMode = 'date-desc';
+  let pkSortMode = 'date-desc';
 
   // Date.now()だけだと同一ミリ秒内の連続追加でidが重複し、
   // 別人のチップが同じdata-idを持って連動選択されるバグの原因になるため、
@@ -481,6 +627,25 @@
 
     saveMembers();
     saveRecords(STORAGE_KEY_MJ, mjRecords);
+  }
+
+  // 会場・大会種別・形式・バイインを追加した際、それ以前に保存された記録には
+  // これらのキーが存在しない。存在しない記録にだけ空文字を補い、既存の値は一切変更しない。
+  function migrateRecordFields() {
+    let mjChanged = false;
+    mjRecords.forEach(r => {
+      if (r.venueId === undefined) { r.venueId = ''; mjChanged = true; }
+      if (r.tourType === undefined) { r.tourType = ''; mjChanged = true; }
+    });
+    if (mjChanged) saveRecords(STORAGE_KEY_MJ, mjRecords);
+
+    let pkChanged = false;
+    pkRecords.forEach(r => {
+      if (r.venueId === undefined) { r.venueId = ''; pkChanged = true; }
+      if (r.format === undefined) { r.format = ''; pkChanged = true; }
+      if (r.buyin === undefined) { r.buyin = ''; pkChanged = true; }
+    });
+    if (pkChanged) saveRecords(STORAGE_KEY_PK, pkRecords);
   }
 
   function switchTab(tab) {
@@ -560,6 +725,73 @@
     nameInput.value = '';
   });
 
+  // ---------- 会場（麻雀・ポーカー共通） ----------
+
+  function saveVenues() {
+    saveRecords(STORAGE_KEY_VENUES, venues);
+  }
+
+  function renderVenues() {
+    const listEl = document.getElementById('venue-list');
+    if (venues.length === 0) {
+      listEl.innerHTML = '<div class="empty-msg">まだ会場がありません</div>';
+    } else {
+      listEl.innerHTML = venues.map(v => `
+        <div class="record-item">
+          <div class="record-info"><div class="main-line">${escapeHtml(v.name)}</div></div>
+          <button class="del-btn" onclick="deleteVenue(${v.id})">削除</button>
+        </div>
+      `).join('');
+    }
+    renderVenueChips('mj-venue-chips', mjSelectedVenue, 'toggleMjVenue');
+    renderVenueChips('pk-venue-chips', pkSelectedVenue, 'togglePkVenue');
+  }
+
+  function addVenue(name) {
+    venues.push({ id: generateId(), name });
+    saveVenues();
+    renderVenues();
+  }
+
+  function deleteVenue(id) {
+    venues = venues.filter(v => v.id !== id);
+    saveVenues();
+    if (mjSelectedVenue === id) mjSelectedVenue = null;
+    if (pkSelectedVenue === id) pkSelectedVenue = null;
+    renderVenues();
+  }
+
+  function renderVenueChips(containerId, selectedId, toggleFnName) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (venues.length === 0) {
+      container.innerHTML = '<div class="empty-msg" style="padding:6px;color:#888;">「メンバー」タブで会場を登録してください</div>';
+      return;
+    }
+    container.innerHTML = venues.map(v => `
+      <button type="button" class="chip ${selectedId === v.id ? 'selected' : ''}" data-id="${v.id}" onclick="${toggleFnName}(${v.id})">${escapeHtml(v.name)}</button>
+    `).join('');
+  }
+
+  function toggleMjVenue(id) {
+    mjSelectedVenue = mjSelectedVenue === id ? null : id;
+    renderVenueChips('mj-venue-chips', mjSelectedVenue, 'toggleMjVenue');
+  }
+
+  function togglePkVenue(id) {
+    pkSelectedVenue = pkSelectedVenue === id ? null : id;
+    renderVenueChips('pk-venue-chips', pkSelectedVenue, 'togglePkVenue');
+  }
+
+  document.getElementById('form-venue').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const nameInput = document.getElementById('venue-name');
+    const name = nameInput.value.trim();
+    if (!name) return;
+    addVenue(name);
+    nameInput.value = '';
+  });
+
   document.getElementById('opponent-stats-select').addEventListener('change', function () {
     const id = this.value ? Number(this.value) : null;
     const headingEl = document.getElementById('opponent-stats-heading');
@@ -598,15 +830,40 @@
 
   // ---------- 麻雀：対戦相手チップ・点数入力・順位自動判定 ----------
 
+  // 同卓10回戦以上のメンバーだけを判定対象にし、対象が10人未満なら何も判定しない。
+  // 平均順位2.5未満（勝ち越し）の良いほうから上位5名、2.5より大きい（負け越し）の悪いほうから上位5名を返す。
+  // ちょうど2.5の相手はどちらにも含めない。
+  // ※動作確認のため一時的に「3回戦以上・3人以上」に緩めている。確認後は10/10に戻すこと。
+  function computeMahjongCompat() {
+    const MIN_MATCHES = 3;
+    const MIN_CANDIDATES = 3;
+    const stats = members.map(m => {
+      const matches = mjRecords.filter(r => (r.opponents || []).includes(m.id));
+      const avgRank = matches.length ? matches.reduce((s, r) => s + r.rank, 0) / matches.length : null;
+      return { id: m.id, count: matches.length, avgRank };
+    });
+    const candidates = stats.filter(s => s.count >= MIN_MATCHES);
+    if (candidates.length < MIN_CANDIDATES) {
+      return { good: new Set(), bad: new Set() };
+    }
+    const winning = candidates.filter(s => s.avgRank < 2.5).sort((a, b) => a.avgRank - b.avgRank).slice(0, 5);
+    const losing = candidates.filter(s => s.avgRank > 2.5).sort((a, b) => b.avgRank - a.avgRank).slice(0, 5);
+    return { good: new Set(winning.map(s => s.id)), bad: new Set(losing.map(s => s.id)) };
+  }
+
   function renderOpponentChips() {
     const container = document.getElementById('mj-opponent-chips');
     if (members.length === 0) {
       container.innerHTML = '<div class="empty-msg" style="padding:6px;color:#888;">「メンバー」タブで登録してください</div>';
       return;
     }
-    container.innerHTML = members.map(m => `
-      <button type="button" class="chip ${mjSelectedOpponents.has(m.id) ? 'selected' : ''}" data-id="${m.id}" onclick="toggleOpponent(${m.id})">${escapeHtml(m.name)}</button>
-    `).join('');
+    const compat = computeMahjongCompat();
+    container.innerHTML = members.map(m => {
+      const compatClass = compat.good.has(m.id) ? ' compat-good' : compat.bad.has(m.id) ? ' compat-bad' : '';
+      return `
+      <button type="button" class="chip${mjSelectedOpponents.has(m.id) ? ' selected' : ''}${compatClass}" data-id="${m.id}" onclick="toggleOpponent(${m.id})">${escapeHtml(m.name)}</button>
+    `;
+    }).join('');
   }
 
   function toggleOpponent(id) {
@@ -630,17 +887,74 @@
       const val = mjOpponentPoints[id] !== undefined ? mjOpponentPoints[id] : '';
       return `
         <label for="mj-opp-point-${id}">${escapeHtml(name)}さんの最終ポイント（ウマオカ込み）</label>
-        <input type="number" step="0.1" id="mj-opp-point-${id}" data-opponent-id="${id}" value="${escapeHtml(val)}" placeholder="例：-20.5">
+        <div class="point-input-row">
+          <button type="button" class="sign-btn" id="mj-opp-point-sign-${id}" aria-label="符号を反転" onclick="toggleOpponentPointSign(${id})">±</button>
+          <input type="text" inputmode="decimal" id="mj-opp-point-${id}" data-opponent-id="${id}" value="${escapeHtml(val)}" placeholder="例：-20.5">
+        </div>
       `;
     }).join('');
     ids.forEach(id => {
       const el = document.getElementById('mj-opp-point-' + id);
+      const btnEl = document.getElementById('mj-opp-point-sign-' + id);
       el.addEventListener('input', function () {
+        el.value = sanitizeDecimalValue(el.value);
         mjOpponentPoints[id] = el.value;
+        updateSignButtonState(btnEl, el.value);
         updateRankPreview();
       });
+      updateSignButtonState(btnEl, el.value);
     });
     updateRankPreview();
+  }
+
+  // 符号（±ボタン）
+  function sanitizeDecimalValue(v) {
+    // 全角入力を半角に正規化してからサニタイズする
+    v = v.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+    v = v.replace(/[．。]/g, '.');
+    v = v.replace(/[－ー―]/g, '-');
+    const negative = v.charAt(0) === '-';
+    let rest = v.replace(/-/g, '').replace(/[^\d.]/g, '');
+    const firstDot = rest.indexOf('.');
+    if (firstDot !== -1) {
+      rest = rest.slice(0, firstDot + 1) + rest.slice(firstDot + 1).replace(/\./g, '');
+    }
+    return (negative ? '-' : '') + rest;
+  }
+
+  function toggleSignValue(v) {
+    if (v === '' || v === '-') {
+      return v === '' ? '-' : '';
+    }
+    return v.charAt(0) === '-' ? v.slice(1) : '-' + v;
+  }
+
+  function updateSignButtonState(btnEl, v) {
+    if (!btnEl) return;
+    btnEl.classList.toggle('sign-btn-active', v.charAt(0) === '-');
+  }
+
+  function toggleMjPointSign() {
+    const el = document.getElementById('mj-point');
+    const btnEl = document.getElementById('mj-point-sign-btn');
+    el.value = toggleSignValue(el.value);
+    updateSignButtonState(btnEl, el.value);
+    updateRankPreview();
+  }
+
+  function toggleOpponentPointSign(id) {
+    const el = document.getElementById('mj-opp-point-' + id);
+    const btnEl = document.getElementById('mj-opp-point-sign-' + id);
+    el.value = toggleSignValue(el.value);
+    mjOpponentPoints[id] = el.value;
+    updateSignButtonState(btnEl, el.value);
+    updateRankPreview();
+  }
+
+  // 空文字や"-"単独などparseFloatでNaNになる入力は0として扱う
+  function toNum(v) {
+    const n = parseFloat(v);
+    return Number.isNaN(n) ? 0 : n;
   }
 
   // 自分と対戦相手3人ぶんの最終ポイント（ウマオカ込み）から、同点は同順位（次の順位を飛ばす）方式で順位を算出する
@@ -678,11 +992,81 @@
       previewEl.textContent = '現在の順位：-';
       warnEl.textContent = result.message;
     }
+    updatePointSum();
+  }
+
+  // 自分＋選択済みの対戦相手ぶんの最終ポイントをリアルタイム合計する。
+  // 4人そろっていなくても、入力済みの値だけで合計して表示する。
+  function updatePointSum() {
+    const sumEl = document.getElementById('mj-point-sum');
+    const noteEl = document.getElementById('mj-point-sum-note');
+    const selfVal = document.getElementById('mj-point').value;
+    const ids = [...mjSelectedOpponents];
+
+    let sum = 0;
+    if (selfVal !== '') {
+      sum += toNum(selfVal);
+    }
+    ids.forEach(id => {
+      const val = mjOpponentPoints[id];
+      if (val !== undefined && val !== '') {
+        sum += toNum(val);
+      }
+    });
+
+    const rounded = Math.round(sum * 10) / 10;
+    sumEl.textContent = `合計：${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}`;
+    if (rounded === 0) {
+      sumEl.classList.remove('point-sum-warn');
+      noteEl.style.display = 'none';
+    } else {
+      sumEl.classList.add('point-sum-warn');
+      noteEl.style.display = 'block';
+    }
+  }
+
+  // ---------- 検索 ----------
+
+  function mjRecordMatches(r, q) {
+    const venue = venues.find(v => v.id === r.venueId);
+    const oppNames = (r.opponents || []).map(id => {
+      const m = members.find(mm => mm.id === id);
+      return m ? m.name : '';
+    });
+    const fields = [r.event, venue ? venue.name : '', r.tourType, r.memo, ...oppNames];
+    return fields.some(f => (f || '').toLowerCase().includes(q));
+  }
+
+  function pkRecordMatches(r, q) {
+    const venue = venues.find(v => v.id === r.venueId);
+    const fields = [r.event, venue ? venue.name : '', r.format, r.memo];
+    return fields.some(f => (f || '').toLowerCase().includes(q));
+  }
+
+  // プライズ欄は「5000円」「120pt」のような自由記述のため、
+  // 先頭の数値部分だけをparseFloatで取り出してソートに使う。数値が無い場合は最下位に回す。
+  function sortPokerRecords(records, mode) {
+    const arr = [...records];
+    arr.sort((a, b) => {
+      if (mode === 'prize-desc') {
+        const av = parseFloat(a.prize);
+        const bv = parseFloat(b.prize);
+        const aNum = Number.isNaN(av) ? -Infinity : av;
+        const bNum = Number.isNaN(bv) ? -Infinity : bv;
+        if (bNum !== aNum) return bNum - aNum;
+        return (b.date || '').localeCompare(a.date || '') || b.id - a.id;
+      }
+      if (mode === 'date-asc') {
+        return (a.date || '').localeCompare(b.date || '') || a.id - b.id;
+      }
+      return (b.date || '').localeCompare(a.date || '') || b.id - a.id;
+    });
+    return arr;
   }
 
   // ---------- 麻雀：一覧・集計 ----------
 
-  function groupMahjongRecords(records) {
+  function groupMahjongRecords(records, sortMode) {
     const groups = {};
     records.forEach(r => {
       const key = (r.date || '') + '｜' + (r.event || '');
@@ -692,38 +1076,60 @@
     const groupArr = Object.values(groups);
     groupArr.forEach(g => {
       g.items.sort((a, b) => (a.round || 1) - (b.round || 1) || a.id - b.id);
+      g.total = g.items.reduce((s, r) => s + r.point, 0);
+      g.maxId = Math.max(...g.items.map(i => i.id));
     });
     groupArr.sort((a, b) => {
+      if (sortMode === 'point-desc') return b.total - a.total;
+      if (sortMode === 'point-asc') return a.total - b.total;
+      if (sortMode === 'date-asc') {
+        const dateCompare = (a.date || '').localeCompare(b.date || '');
+        if (dateCompare !== 0) return dateCompare;
+        return a.maxId - b.maxId;
+      }
       const dateCompare = (b.date || '').localeCompare(a.date || '');
       if (dateCompare !== 0) return dateCompare;
-      const aMaxId = Math.max(...a.items.map(i => i.id));
-      const bMaxId = Math.max(...b.items.map(i => i.id));
-      return bMaxId - aMaxId;
+      return b.maxId - a.maxId;
     });
     return groupArr;
   }
 
   function renderMahjong() {
     const listEl = document.getElementById('mj-list');
-    const groups = groupMahjongRecords(mjRecords);
+    const searchInput = document.getElementById('mj-search');
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const filteredRecords = query ? mjRecords.filter(r => mjRecordMatches(r, query)) : mjRecords;
+    const searchInfoEl = document.getElementById('mj-search-info');
+    searchInfoEl.textContent = query ? `${mjRecords.length}件中${filteredRecords.length}件を表示` : '';
+    const groups = groupMahjongRecords(filteredRecords, mjSortMode);
+    const compat = computeMahjongCompat();
+
+    document.querySelectorAll('#mj-sort-bar .chip').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.sort === mjSortMode);
+    });
 
     if (groups.length === 0) {
-      listEl.innerHTML = '<div class="empty-msg">まだ記録がありません</div>';
+      listEl.innerHTML = `<div class="empty-msg">${query ? '該当する記録がありません' : 'まだ記録がありません'}</div>`;
     } else {
       listEl.innerHTML = groups.map(g => {
-        const total = g.items.reduce((s, r) => s + r.point, 0);
+        const total = g.total;
         const avgRank = g.items.reduce((s, r) => s + r.rank, 0) / g.items.length;
         const itemsHtml = g.items.map(r => {
-          const oppNames = (r.opponents || [])
+          const oppHtml = (r.opponents || [])
             .map(id => {
               const m = members.find(mm => mm.id === id);
-              return m ? m.name : null;
+              if (!m) return null;
+              const cls = compat.good.has(id) ? ' class="compat-good"' : compat.bad.has(id) ? ' class="compat-bad"' : '';
+              return `<span${cls}>${escapeHtml(m.name)}</span>`;
             })
             .filter(Boolean);
+          const venue = venues.find(v => v.id === r.venueId);
+          const venueTypeLine = [venue ? venue.name : '', r.tourType || ''].filter(Boolean).join(' ／ ');
           return `
             <div class="round-row">
               <div class="main-line"><span class="rank-badge">${r.rank}位</span>第${r.round || 1}回戦　${r.point >= 0 ? '+' : ''}${r.point}pt</div>
-              ${oppNames.length ? `<div class="sub-line">対戦相手：${oppNames.map(n => escapeHtml(n)).join('、')}</div>` : ''}
+              ${venueTypeLine ? `<div class="sub-line">${escapeHtml(venueTypeLine)}</div>` : ''}
+              ${oppHtml.length ? `<div class="sub-line">対戦相手：${oppHtml.join('、')}</div>` : ''}
               ${r.memo ? `<div class="memo-line">${escapeHtml(r.memo)}</div>` : ''}
               <button class="del-btn" onclick="deleteMahjong(${r.id})">削除</button>
             </div>
@@ -741,12 +1147,12 @@
       }).join('');
     }
 
-    document.getElementById('mj-stat-count').textContent = mjRecords.length;
-    if (mjRecords.length > 0) {
-      const avgRank = mjRecords.reduce((s, r) => s + r.rank, 0) / mjRecords.length;
-      const avgPoint = mjRecords.reduce((s, r) => s + r.point, 0) / mjRecords.length;
-      const topRate = mjRecords.filter(r => r.rank === 1).length / mjRecords.length * 100;
-      const rentaiRate = mjRecords.filter(r => r.rank === 1 || r.rank === 2).length / mjRecords.length * 100;
+    document.getElementById('mj-stat-count').textContent = filteredRecords.length;
+    if (filteredRecords.length > 0) {
+      const avgRank = filteredRecords.reduce((s, r) => s + r.rank, 0) / filteredRecords.length;
+      const avgPoint = filteredRecords.reduce((s, r) => s + r.point, 0) / filteredRecords.length;
+      const topRate = filteredRecords.filter(r => r.rank === 1).length / filteredRecords.length * 100;
+      const rentaiRate = filteredRecords.filter(r => r.rank === 1 || r.rank === 2).length / filteredRecords.length * 100;
       document.getElementById('mj-stat-avg-rank').textContent = avgRank.toFixed(2);
       document.getElementById('mj-stat-avg-point').textContent = (avgPoint >= 0 ? '+' : '') + avgPoint.toFixed(1);
       document.getElementById('mj-stat-top-rate').textContent = topRate.toFixed(1) + '%';
@@ -763,26 +1169,42 @@
 
   function renderPoker() {
     const listEl = document.getElementById('pk-list');
-    const sorted = [...pkRecords].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+    const searchInput = document.getElementById('pk-search');
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const filteredRecords = query ? pkRecords.filter(r => pkRecordMatches(r, query)) : pkRecords;
+    const searchInfoEl = document.getElementById('pk-search-info');
+    searchInfoEl.textContent = query ? `${pkRecords.length}件中${filteredRecords.length}件を表示` : '';
+    const sorted = sortPokerRecords(filteredRecords, pkSortMode);
+
+    document.querySelectorAll('#pk-sort-bar .chip').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.sort === pkSortMode);
+    });
 
     if (sorted.length === 0) {
-      listEl.innerHTML = '<div class="empty-msg">まだ記録がありません</div>';
+      listEl.innerHTML = `<div class="empty-msg">${query ? '該当する記録がありません' : 'まだ記録がありません'}</div>`;
     } else {
-      listEl.innerHTML = sorted.map(r => `
+      listEl.innerHTML = sorted.map(r => {
+        const venue = venues.find(v => v.id === r.venueId);
+        const hasBuyin = r.buyin !== '' && r.buyin !== undefined && r.buyin !== null;
+        const extraLine = [venue ? venue.name : '', r.format || '', hasBuyin ? `バイイン${r.buyin}` : '']
+          .filter(Boolean).join(' ／ ');
+        return `
         <div class="record-item">
           <div class="record-info">
             <div class="main-line"><span class="rank-badge">${r.rank}位</span>${formatDate(r.date)}（${r.players}人参加）</div>
             <div class="sub-line">${escapeHtml(r.event || '（大会名なし）')}${r.prize ? ' ／ ' + escapeHtml(r.prize) : ''}</div>
+            ${extraLine ? `<div class="sub-line">${escapeHtml(extraLine)}</div>` : ''}
             ${r.memo ? `<div class="memo-line">${escapeHtml(r.memo)}</div>` : ''}
           </div>
           <button class="del-btn" onclick="deletePoker(${r.id})">削除</button>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
-    document.getElementById('pk-stat-count').textContent = pkRecords.length;
-    if (pkRecords.length > 0) {
-      const avgRank = pkRecords.reduce((s, r) => s + r.rank, 0) / pkRecords.length;
+    document.getElementById('pk-stat-count').textContent = filteredRecords.length;
+    if (filteredRecords.length > 0) {
+      const avgRank = filteredRecords.reduce((s, r) => s + r.rank, 0) / filteredRecords.length;
       document.getElementById('pk-stat-avg-rank').textContent = avgRank.toFixed(2);
     } else {
       document.getElementById('pk-stat-avg-rank').textContent = '-';
@@ -791,9 +1213,20 @@
     updateEventDatalist(pkRecords, document.getElementById('pk-event-list'));
   }
 
+  function setMjSort(mode) {
+    mjSortMode = mode;
+    renderMahjong();
+  }
+
+  function setPkSort(mode) {
+    pkSortMode = mode;
+    renderPoker();
+  }
+
   function deleteMahjong(id) {
     mjRecords = mjRecords.filter(r => r.id !== id);
     saveRecords(STORAGE_KEY_MJ, mjRecords);
+    renderOpponentChips();
     renderMahjong();
   }
 
@@ -803,12 +1236,19 @@
     renderPoker();
   }
 
-  document.getElementById('mj-point').addEventListener('input', updateRankPreview);
+  document.getElementById('mj-point').addEventListener('input', function () {
+    this.value = sanitizeDecimalValue(this.value);
+    updateSignButtonState(document.getElementById('mj-point-sign-btn'), this.value);
+    updateRankPreview();
+  });
+  document.getElementById('mj-search').addEventListener('input', renderMahjong);
+  document.getElementById('pk-search').addEventListener('input', renderPoker);
 
   document.getElementById('form-mahjong').addEventListener('submit', function (e) {
     e.preventDefault();
     const date = document.getElementById('mj-date').value;
     const event = document.getElementById('mj-event').value.trim();
+    const tourType = document.getElementById('mj-tour-type').value;
     const round = parseInt(document.getElementById('mj-round').value, 10) || 1;
     const memo = document.getElementById('mj-memo').value.trim();
     if (!date) return;
@@ -826,6 +1266,8 @@
       point: result.selfPoint,
       opponents: result.opponentIds,
       opponentPoints: result.opponentPoints,
+      venueId: mjSelectedVenue !== null ? mjSelectedVenue : '',
+      tourType,
       memo
     });
     saveRecords(STORAGE_KEY_MJ, mjRecords);
@@ -833,9 +1275,11 @@
     // 日付・大会名・対戦相手は次の回戦のために残し、回戦番号と点数だけリセットする
     document.getElementById('mj-round').value = round + 1;
     document.getElementById('mj-point').value = '';
+    updateSignButtonState(document.getElementById('mj-point-sign-btn'), '');
     document.getElementById('mj-memo').value = '';
     mjOpponentPoints = {};
     renderOpponentPointInputs();
+    renderOpponentChips();
 
     renderMahjong();
   });
@@ -844,20 +1288,33 @@
     e.preventDefault();
     const date = document.getElementById('pk-date').value;
     const event = document.getElementById('pk-event').value.trim();
+    const format = document.getElementById('pk-format').value;
+    const buyinRaw = document.getElementById('pk-buyin').value;
+    const buyin = buyinRaw !== '' ? parseFloat(buyinRaw) : '';
     const players = parseInt(document.getElementById('pk-players').value, 10);
     const rank = parseInt(document.getElementById('pk-rank').value, 10);
     const prize = document.getElementById('pk-prize').value.trim();
     const memo = document.getElementById('pk-memo').value.trim();
     if (!date || !players || !rank) return;
 
-    pkRecords.push({ id: generateId(), date, event, players, rank, prize, memo });
+    pkRecords.push({
+      id: generateId(),
+      date, event, players, rank, prize, memo,
+      venueId: pkSelectedVenue !== null ? pkSelectedVenue : '',
+      format,
+      buyin
+    });
     saveRecords(STORAGE_KEY_PK, pkRecords);
     this.reset();
+    pkSelectedVenue = null;
+    renderVenueChips('pk-venue-chips', pkSelectedVenue, 'togglePkVenue');
     renderPoker();
   });
 
   migrateDuplicateMemberIds();
+  migrateRecordFields();
   renderMembers();
+  renderVenues();
   renderMahjong();
   renderPoker();
 </script>
