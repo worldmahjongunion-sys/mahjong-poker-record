@@ -560,6 +560,11 @@
   const STORAGE_KEY_MEMBERS = 'mahjongPokerRecord_members';
   const STORAGE_KEY_VENUES = 'mahjongPokerRecord_venues';
 
+  // 相性判定（computeMahjongCompat）のしきい値
+  const COMPAT_MIN_MATCHES = 10;    // 対戦相手として相性判定の対象にするための同卓の最低回戦数
+  const COMPAT_MIN_CANDIDATES = 10; // 相性判定を発動させるための判定対象人数
+  const COMPAT_TOP_N = 5;           // 好相性・苦手相性として表示する上位人数
+
   function loadRecords(key) {
     try {
       const raw = localStorage.getItem(key);
@@ -833,21 +838,18 @@
   // 同卓10回戦以上のメンバーだけを判定対象にし、対象が10人未満なら何も判定しない。
   // 平均順位2.5未満（勝ち越し）の良いほうから上位5名、2.5より大きい（負け越し）の悪いほうから上位5名を返す。
   // ちょうど2.5の相手はどちらにも含めない。
-  // ※動作確認のため一時的に「3回戦以上・3人以上」に緩めている。確認後は10/10に戻すこと。
   function computeMahjongCompat() {
-    const MIN_MATCHES = 3;
-    const MIN_CANDIDATES = 3;
     const stats = members.map(m => {
       const matches = mjRecords.filter(r => (r.opponents || []).includes(m.id));
       const avgRank = matches.length ? matches.reduce((s, r) => s + r.rank, 0) / matches.length : null;
       return { id: m.id, count: matches.length, avgRank };
     });
-    const candidates = stats.filter(s => s.count >= MIN_MATCHES);
-    if (candidates.length < MIN_CANDIDATES) {
+    const candidates = stats.filter(s => s.count >= COMPAT_MIN_MATCHES);
+    if (candidates.length < COMPAT_MIN_CANDIDATES) {
       return { good: new Set(), bad: new Set() };
     }
-    const winning = candidates.filter(s => s.avgRank < 2.5).sort((a, b) => a.avgRank - b.avgRank).slice(0, 5);
-    const losing = candidates.filter(s => s.avgRank > 2.5).sort((a, b) => b.avgRank - a.avgRank).slice(0, 5);
+    const winning = candidates.filter(s => s.avgRank < 2.5).sort((a, b) => a.avgRank - b.avgRank).slice(0, COMPAT_TOP_N);
+    const losing = candidates.filter(s => s.avgRank > 2.5).sort((a, b) => b.avgRank - a.avgRank).slice(0, COMPAT_TOP_N);
     return { good: new Set(winning.map(s => s.id)), bad: new Set(losing.map(s => s.id)) };
   }
 
