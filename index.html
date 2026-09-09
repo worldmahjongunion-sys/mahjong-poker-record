@@ -370,6 +370,28 @@
     cursor: pointer;
     padding: 4px 6px;
   }
+  .unused-notice {
+    background: #fffaf0;
+    border: 1.5px solid var(--gold);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .unused-notice-title {
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: var(--felt-dark);
+    margin-bottom: 6px;
+  }
+  .unused-notice-names {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 10px;
+    line-height: 1.6;
+  }
+  .unused-notice .del-btn {
+    width: 100%;
+  }
 </style>
 </head>
 <body>
@@ -561,6 +583,7 @@
 
     <div class="card">
       <h2>登録メンバー一覧</h2>
+      <div id="unused-members-box"></div>
       <div class="record-list" id="member-list"></div>
     </div>
 
@@ -744,6 +767,19 @@
     if (pkChanged) saveRecords(STORAGE_KEY_PK, pkRecords);
   }
 
+  // createdAt（登録日）を持たない既存メンバーに、起動時点の日時を一度だけ補う。既存の値は変更しない。
+  function migrateMemberCreatedAt() {
+    let changed = false;
+    const now = new Date().toISOString();
+    members.forEach(m => {
+      if (m.createdAt === undefined) {
+        m.createdAt = now;
+        changed = true;
+      }
+    });
+    if (changed) saveMembers();
+  }
+
   // localStorageの内容が手動編集や旧バージョンとの混在で壊れていても、
   // 画面が真っ白になったり、id等がonclick属性へそのまま埋め込まれて壊れたりしないよう、
   // 型を強制的に正規化する。値の意味は変えず、型と欠損だけを補う。
@@ -855,18 +891,54 @@
     return saveRecords(STORAGE_KEY_MEMBERS, members);
   }
 
+  // メンバーが麻雀の記録で何回戦、対戦相手として登場したか（＝同卓回戦数）
+  function getMemberMatchCount(id) {
+    return mjRecords.filter(r => (r.opponents || []).includes(id)).length;
+  }
+
+  // 削除候補: 同卓回数0回 かつ createdAt から90日以上経過したメンバー
+  const UNUSED_MEMBER_DAYS = 90;
+  function getUnusedMemberCandidates() {
+    const now = Date.now();
+    return members.filter(m => {
+      if (getMemberMatchCount(m.id) !== 0) return false;
+      if (!m.createdAt) return false;
+      const created = new Date(m.createdAt).getTime();
+      if (isNaN(created)) return false;
+      return (now - created) / 86400000 >= UNUSED_MEMBER_DAYS;
+    }).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  }
+
   function renderMembers() {
     const listEl = document.getElementById('member-list');
+    const unusedBoxEl = document.getElementById('unused-members-box');
+
     if (members.length === 0) {
       listEl.innerHTML = '<div class="empty-msg">まだメンバーがいません</div>';
     } else {
-      listEl.innerHTML = members.map(m => `
+      const countMap = new Map(members.map(m => [m.id, getMemberMatchCount(m.id)]));
+      // 対戦回数の降順（0回は自然に最下位にまとまる）、同数の場合は名前順
+      const sortedMembers = members.slice().sort((a, b) => {
+        const ca = countMap.get(a.id), cb = countMap.get(b.id);
+        if (ca !== cb) return cb - ca;
+        return a.name.localeCompare(b.name, 'ja');
+      });
+      listEl.innerHTML = sortedMembers.map(m => `
         <div class="record-item">
-          <div class="record-info"><div class="main-line">${escapeHtml(m.name)}</div></div>
+          <div class="record-info"><div class="main-line">${escapeHtml(m.name)}（${countMap.get(m.id)}回）</div></div>
           <button class="del-btn" onclick="deleteMember(${m.id}, this)">削除</button>
         </div>
       `).join('');
     }
+
+    const unusedCandidates = getUnusedMemberCandidates();
+    unusedBoxEl.innerHTML = unusedCandidates.length === 0 ? '' : `
+      <div class="unused-notice">
+        <div class="unused-notice-title">3か月以上使われていないメンバーが${unusedCandidates.length}人います</div>
+        <div class="unused-notice-names">${unusedCandidates.map(m => escapeHtml(m.name)).join('、')}</div>
+        <button type="button" class="del-btn" onclick="bulkDeleteUnusedMembers(this)">まとめて削除</button>
+      </div>
+    `;
 
     const select = document.getElementById('opponent-stats-select');
     const prevVal = select.value;
@@ -879,13 +951,43 @@
   }
 
   function addMember(name) {
-    members.push({ id: generateId(), name });
+    members.push({ id: generateId(), name, createdAt: new Date().toISOString() });
     if (!saveMembers()) {
       members.pop();
       return false;
     }
     renderMembers();
     return true;
+  }
+
+  // 「まとめて削除」ボタン: confirm()で確認してから、削除候補（同卓0回・登録90日超）だけを一括削除する。
+  // 自動実行はせず、必ずユーザーの明示的な操作とconfirm()を経由する。
+  function bulkDeleteUnusedMembers(btn) {
+    if (btn) btn.disabled = true;
+    const candidates = getUnusedMemberCandidates();
+    if (candidates.length === 0) {
+      if (btn) btn.disabled = false;
+      return;
+    }
+    const names = candidates.map(m => m.name).join('、');
+    if (!confirm(`次の${candidates.length}人を削除します。よろしいですか。\n${names}`)) {
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    const idsToDelete = new Set(candidates.map(m => m.id));
+    const backup = members;
+    members = members.filter(m => !idsToDelete.has(m.id));
+    if (!saveMembers()) {
+      members = backup;
+      if (btn) btn.disabled = false;
+      return;
+    }
+    idsToDelete.forEach(id => {
+      mjSelectedOpponents.delete(id);
+      delete mjOpponentPoints[id];
+    });
+    renderMembers();
   }
 
   function deleteMember(id, btn) {
@@ -1660,6 +1762,7 @@
   sanitizeLoadedData();
   migrateDuplicateMemberIds();
   migrateRecordFields();
+  migrateMemberCreatedAt();
   renderMembers();
   renderVenues();
   renderMahjong();
