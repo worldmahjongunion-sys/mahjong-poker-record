@@ -392,6 +392,94 @@
   .unused-notice .del-btn {
     width: 100%;
   }
+  .backup-reminder {
+    display: none;
+    background: #fffaf0;
+    color: var(--felt-dark);
+    border: 1.5px solid var(--gold);
+    border-radius: 10px;
+    padding: 10px 36px 10px 12px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    position: relative;
+  }
+  .backup-reminder.show {
+    display: block;
+  }
+  .backup-reminder .notice-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--felt-dark);
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+  .backup-reminder-btn {
+    margin-top: 8px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    background: var(--felt);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .backup-desc {
+    font-size: 0.85rem;
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 4px;
+  }
+  .backup-last {
+    font-size: 0.8rem;
+    color: #777;
+    margin-top: 6px;
+  }
+  .backup-btn-sub {
+    background: #fff;
+    color: var(--felt-dark);
+    border: 2px solid var(--felt);
+  }
+  .backup-btn-sub:active {
+    background: #eee;
+  }
+  #backup-choice-text {
+    white-space: pre-line;
+  }
+  .backup-choice {
+    display: none;
+    margin-top: 12px;
+    background: #fffaf0;
+    border: 1.5px solid var(--gold);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  .backup-choice.show {
+    display: block;
+  }
+  .backup-choice .submit-btn {
+    margin-top: 8px;
+  }
+  .backup-error {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--danger);
+    line-height: 1.6;
+  }
+  .backup-result {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--felt-dark);
+    line-height: 1.6;
+  }
 </style>
 </head>
 <body>
@@ -401,6 +489,12 @@
   <div class="global-notice" id="global-notice">
     <span id="global-notice-text"></span>
     <button type="button" class="notice-close" aria-label="閉じる" onclick="hideGlobalNotice()">×</button>
+  </div>
+
+  <div class="backup-reminder" id="backup-reminder">
+    <span id="backup-reminder-text"></span><br>
+    <button type="button" class="backup-reminder-btn" onclick="exportBackup()">控えを書き出す</button>
+    <button type="button" class="notice-close" aria-label="閉じる" onclick="hideBackupReminder()">×</button>
   </div>
 
   <div class="tabs">
@@ -626,6 +720,29 @@
           <div class="label">連対率</div>
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>データの控え（バックアップ）</h2>
+      <p class="backup-desc">記録（麻雀・ポーカー）・メンバー・会場を、1つのファイルにまとめてスマホに保存します。スマホのデータ消去などで消えてしまっても、このファイルを読み込めば元に戻せます。</p>
+      <button type="button" class="submit-btn" onclick="exportBackup()">控えを書き出す</button>
+      <div class="backup-last" id="backup-last"></div>
+
+      <button type="button" class="submit-btn backup-btn-sub" onclick="document.getElementById('backup-file').click()">控えを読み込む</button>
+      <input type="file" id="backup-file" style="display:none;">
+
+      <div class="backup-choice" id="backup-choice">
+        <div id="backup-choice-text"></div>
+        <button type="button" class="submit-btn" onclick="applyPendingImport('merge')">今のデータに追加する</button>
+        <button type="button" class="submit-btn backup-btn-sub" onclick="applyPendingImport('overwrite')">上書きする</button>
+        <button type="button" class="submit-btn backup-btn-sub" onclick="cancelPendingImport()">やめる</button>
+      </div>
+
+      <div class="backup-error" id="backup-error"></div>
+      <div class="backup-result" id="backup-result"></div>
+
+      <button type="button" class="submit-btn backup-btn-sub" id="backup-undo-btn" style="display:none;" onclick="restoreBeforeImport()">読み込む前の状態に戻す</button>
+      <div class="backup-last" id="backup-undo-info"></div>
     </div>
   </div>
 </div>
@@ -1759,6 +1876,397 @@
     if (submitBtn) submitBtn.disabled = false;
   });
 
+  // ---------- データの控え（バックアップ） ----------
+
+  // 控えファイルの形式。中身の形を変えるときは BACKUP_FORMAT_VERSION を上げ、
+  // validateBackup() で古い版も読めるようにする（古い控えが読めなくならないように）。
+  const APP_VERSION = '2026.10.16';
+  const BACKUP_FORMAT = 'mahjongPokerRecord-backup';
+  const BACKUP_FORMAT_VERSION = 1;
+  const BACKUP_REMIND_DAYS = 14;
+  const BACKUP_MAX_FILE_BYTES = 20 * 1024 * 1024;
+  // 既存の4つのキーはそのままにして、控えのためにこの2つだけを新しく使う
+  const STORAGE_KEY_LAST_BACKUP = 'mahjongPokerRecord_lastBackupAt';
+  const STORAGE_KEY_BEFORE_IMPORT = 'mahjongPokerRecord_beforeImport';
+
+  let lastBackupAtInMemory = null; // localStorageに書けなかった場合でも、この起動中は案内を消すため
+  let backupReminderDismissed = false;
+  let pendingImport = null;
+
+  function getStoredText(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function buildBackupData() {
+    return {
+      format: BACKUP_FORMAT,
+      formatVersion: BACKUP_FORMAT_VERSION,
+      appVersion: APP_VERSION,
+      exportedAt: new Date().toISOString(),
+      data: { mahjong: mjRecords, poker: pkRecords, members: members, venues: venues },
+    };
+  }
+
+  function hasAnyData() {
+    return mjRecords.length > 0 || pkRecords.length > 0 || members.length > 0 || venues.length > 0;
+  }
+
+  function countsText(d) {
+    return `麻雀の記録 ${d.mahjong.length}件・ポーカーの記録 ${d.poker.length}件・メンバー ${d.members.length}人・会場 ${d.venues.length}件`;
+  }
+
+  function pad2(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  // 端末の時刻での日付（toISOString()は世界標準時なので、日本の朝9時前だと前日になってしまう）
+  function localDateString(d) {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  function formatDateTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+
+  function getLastBackupAt() {
+    const stored = getStoredText(STORAGE_KEY_LAST_BACKUP);
+    const candidates = [stored, lastBackupAtInMemory].filter(v => v && !isNaN(new Date(v).getTime()));
+    if (candidates.length === 0) return null;
+    return candidates.sort((a, b) => new Date(b) - new Date(a))[0];
+  }
+
+  function setLastBackupAt(iso) {
+    lastBackupAtInMemory = iso;
+    try {
+      localStorage.setItem(STORAGE_KEY_LAST_BACKUP, iso);
+    } catch (e) {
+      // 書けなくても控えのファイル自体は保存できているので、ここでは何もしない
+    }
+  }
+
+  function setBackupMessage(errorMsg, resultMsg) {
+    document.getElementById('backup-error').textContent = errorMsg || '';
+    document.getElementById('backup-result').textContent = resultMsg || '';
+  }
+
+  function hideBackupReminder() {
+    backupReminderDismissed = true;
+    document.getElementById('backup-reminder').classList.remove('show');
+  }
+
+  // 書き出し日時の表示・画面上部の案内・「読み込む前の状態に戻す」ボタンを、今の状態に合わせて更新する
+  function updateBackupStatus() {
+    const last = getLastBackupAt();
+    document.getElementById('backup-last').textContent = last
+      ? `最後に書き出した日時：${formatDateTime(last)}`
+      : 'まだ一度も書き出していません';
+
+    const reminderEl = document.getElementById('backup-reminder');
+    const days = last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : null;
+    // データが空のときは、書き出し日時も一緒に消えている可能性があるので案内しない
+    const needReminder = hasAnyData() && !backupReminderDismissed && (days === null || days >= BACKUP_REMIND_DAYS);
+    if (needReminder) {
+      document.getElementById('backup-reminder-text').textContent = days === null
+        ? 'まだ一度も控えを書き出していません。スマホのデータ消去などで記録が消えても戻せるよう、控えを書き出しましょう。'
+        : `最後に控えを書き出してから${days}日たちました。控えを書き出しましょう。`;
+      reminderEl.classList.add('show');
+    } else {
+      reminderEl.classList.remove('show');
+    }
+
+    // 読み込む前が空だった場合は、戻すと読み込んだ記録が消えるだけなのでボタンを出さない
+    const before = readBeforeImport();
+    const beforeHasData = before && Object.values(before.data).some(list => list.length > 0);
+    const undoBtn = document.getElementById('backup-undo-btn');
+    const undoInfo = document.getElementById('backup-undo-info');
+    if (beforeHasData) {
+      undoBtn.style.display = '';
+      undoInfo.textContent = `${formatDateTime(before.exportedAt)}に読み込む前の状態（${countsText(before.data)}）を1回分だけ取ってあります`;
+    } else {
+      undoBtn.style.display = 'none';
+      undoInfo.textContent = '';
+    }
+  }
+
+  function exportBackup() {
+    const backup = buildBackupData();
+    const fileName = `成績記録_バックアップ_${localDateString(new Date())}.json`;
+    try {
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setBackupMessage('控えを書き出せませんでした。時間をおいてもう一度お試しください。', '');
+      return;
+    }
+    setLastBackupAt(backup.exportedAt);
+    setBackupMessage('', `控えを書き出しました（${fileName}）。スマホの「ダウンロード」に保存されます。LINEの自分あてのトークやGoogleドライブなど、スマホの外にも置いておくと安心です。`);
+    updateBackupStatus();
+  }
+
+  // 控えファイルの中身が正しい形かを確かめる。正しくなければ { error } を返し、何も変更しない。
+  function validateBackup(obj) {
+    const NOT_BACKUP = 'このファイルは、このアプリの控えではないようです。「控えを書き出す」で作ったファイルを選んでください。';
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj.format !== BACKUP_FORMAT) {
+      return { error: NOT_BACKUP };
+    }
+    if (!Number.isInteger(obj.formatVersion) || obj.formatVersion < 1) {
+      return { error: NOT_BACKUP };
+    }
+    if (obj.formatVersion > BACKUP_FORMAT_VERSION) {
+      return { error: 'このアプリより新しい版で書き出された控えのため、読み込めません。ページを読み込み直して、アプリを新しくしてからお試しください。' };
+    }
+    const d = obj.data;
+    if (!d || typeof d !== 'object') {
+      return { error: '控えの中身が欠けているようです。別の控えファイルでお試しください。' };
+    }
+    const parts = [
+      ['mahjong', '麻雀の記録', 'date'],
+      ['poker', 'ポーカーの記録', 'date'],
+      ['members', 'メンバー', 'name'],
+      ['venues', '会場', 'name'],
+    ];
+    for (const [key, label, textField] of parts) {
+      if (!Array.isArray(d[key])) {
+        return { error: `控えの中身が欠けているようです（${label}がありません）。別の控えファイルでお試しください。` };
+      }
+      for (let i = 0; i < d[key].length; i++) {
+        const item = d[key][i];
+        const ok = item && typeof item === 'object' && !Array.isArray(item) &&
+          item.id !== null && item.id !== '' && Number.isFinite(Number(item.id)) &&
+          typeof item[textField] === 'string';
+        if (!ok) {
+          return { error: `控えの中身が壊れているようです（${label}の${i + 1}件目）。別の控えファイルでお試しください。` };
+        }
+      }
+    }
+    return {
+      data: { mahjong: d.mahjong, poker: d.poker, members: d.members, venues: d.venues },
+      exportedAt: typeof obj.exportedAt === 'string' ? obj.exportedAt : '',
+    };
+  }
+
+  function readBeforeImport() {
+    const raw = getStoredText(STORAGE_KEY_BEFORE_IMPORT);
+    if (!raw) return null;
+    try {
+      const v = validateBackup(JSON.parse(raw));
+      return v.error ? null : v;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  document.getElementById('backup-file').addEventListener('change', function () {
+    const file = this.files && this.files[0];
+    this.value = ''; // 同じファイルをもう一度選んでも反応するように
+    cancelPendingImport();
+    setBackupMessage('', '');
+    if (!file) return;
+
+    const UNCHANGED = '（今のデータは変更していません）';
+    if (file.size > BACKUP_MAX_FILE_BYTES) {
+      setBackupMessage('ファイルが大きすぎるため、読み込めませんでした。このアプリの控えファイルか確かめてください。' + UNCHANGED, '');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function () {
+      let obj;
+      try {
+        obj = JSON.parse(String(reader.result).replace(/^﻿/, ''));
+      } catch (e) {
+        setBackupMessage('ファイルの形式が正しくないため、読み込めませんでした。「控えを書き出す」で作ったファイルを選んでください。' + UNCHANGED, '');
+        return;
+      }
+      const v = validateBackup(obj);
+      if (v.error) {
+        setBackupMessage(v.error + UNCHANGED, '');
+        return;
+      }
+      pendingImport = v;
+      if (!hasAnyData()) {
+        // 今のデータが空なら、失うものがないのでそのまま読み込む
+        applyPendingImport('overwrite', true);
+        return;
+      }
+      const when = formatDateTime(v.exportedAt);
+      document.getElementById('backup-choice-text').textContent =
+        `控え（${when ? when + 'に書き出し・' : ''}${countsText(v.data)}）を読み込みます。\n` +
+        `今のデータ（${countsText({ mahjong: mjRecords, poker: pkRecords, members: members, venues: venues })}）をどうしますか。`;
+      document.getElementById('backup-choice').classList.add('show');
+    };
+    reader.onerror = function () {
+      setBackupMessage('ファイルを開けませんでした。もう一度選び直してください。' + UNCHANGED, '');
+    };
+    reader.readAsText(file);
+  });
+
+  function cancelPendingImport() {
+    pendingImport = null;
+    document.getElementById('backup-choice').classList.remove('show');
+  }
+
+  function applyPendingImport(mode, skipConfirm) {
+    const v = pendingImport;
+    if (!v) return;
+    if (mode === 'overwrite' && !skipConfirm &&
+        !confirm(`今のデータをすべて消して、控えの内容に置き換えます。よろしいですか。\n\n読み込む前の状態は、「読み込む前の状態に戻す」で1回分だけ戻せます。`)) {
+      return;
+    }
+    cancelPendingImport();
+    importBackupData(v, mode, false);
+  }
+
+  // 「読み込む前の状態に戻す」: 退避しておいた1回分で上書きする。今の状態は代わりに退避されるので、もう一度押せば戻る。
+  function restoreBeforeImport() {
+    const before = readBeforeImport();
+    if (!before || !Object.values(before.data).some(list => list.length > 0)) {
+      setBackupMessage('戻せる状態が見つかりませんでした。', '');
+      updateBackupStatus();
+      return;
+    }
+    if (!confirm(`読み込む前の状態（${countsText(before.data)}）に戻します。よろしいですか。\n\n今のデータは、代わりに1回分だけ取っておきます。`)) {
+      return;
+    }
+    cancelPendingImport();
+    importBackupData(before, 'overwrite', true);
+  }
+
+  // idが同じものは今のデータを優先し、控えの側を読み飛ばす
+  function mergeById(current, incoming) {
+    const ids = new Set(current.map(x => Number(x.id)));
+    const list = current.slice();
+    let added = 0, skipped = 0;
+    incoming.forEach(item => {
+      if (ids.has(Number(item.id))) {
+        skipped++;
+      } else {
+        ids.add(Number(item.id));
+        list.push(item);
+        added++;
+      }
+    });
+    return { list, added, skipped };
+  }
+
+  function importBackupData(v, mode, isUndo) {
+    const keys = [STORAGE_KEY_MJ, STORAGE_KEY_PK, STORAGE_KEY_MEMBERS, STORAGE_KEY_VENUES];
+    const UNCHANGED = '（今のデータは変更していません）';
+
+    // 1. 今のデータを、別のキーに1回分だけ退避する。退避できなければ何もしない。
+    const snapshot = buildBackupData();
+    try {
+      localStorage.setItem(STORAGE_KEY_BEFORE_IMPORT, JSON.stringify(snapshot));
+    } catch (e) {
+      setBackupMessage('読み込む前の状態を取っておけなかったため、読み込みを中止しました。端末の保存容量が足りない可能性があります。' + UNCHANGED, '');
+      return;
+    }
+
+    // 2. 読み込む内容を組み立てる（控えの中身は他から参照されないよう複製してから使う）
+    const incoming = JSON.parse(JSON.stringify(v.data));
+    const prevRaw = keys.map(getStoredText);
+    const prev = { mj: mjRecords, pk: pkRecords, members: members, venues: venues };
+    let merged = null;
+    if (mode === 'merge') {
+      const cur = JSON.parse(JSON.stringify(snapshot.data));
+      merged = {
+        mahjong: mergeById(cur.mahjong, incoming.mahjong),
+        poker: mergeById(cur.poker, incoming.poker),
+        members: mergeById(cur.members, incoming.members),
+        venues: mergeById(cur.venues, incoming.venues),
+      };
+      mjRecords = merged.mahjong.list;
+      pkRecords = merged.poker.list;
+      members = merged.members.list;
+      venues = merged.venues.list;
+    } else {
+      mjRecords = incoming.mahjong;
+      pkRecords = incoming.poker;
+      members = incoming.members;
+      venues = incoming.venues;
+    }
+
+    // 3. 起動時と同じ正規化・移行処理を通してから保存する
+    sanitizeLoadedData();
+    migrateDuplicateMemberIds();
+    migrateRecordFields();
+    migrateMemberCreatedAt();
+    const saved = saveRecords(STORAGE_KEY_MJ, mjRecords) && saveRecords(STORAGE_KEY_PK, pkRecords) &&
+      saveMembers() && saveVenues();
+    if (!saved) {
+      // 途中まで書けていても、読み込む前の内容に書き戻す
+      keys.forEach((k, i) => {
+        try {
+          localStorage.setItem(k, prevRaw[i] === null ? '[]' : prevRaw[i]);
+        } catch (e) { /* 書き戻しも失敗した場合は、退避した控えから「読み込む前の状態に戻す」で戻せる */ }
+      });
+      mjRecords = prev.mj;
+      pkRecords = prev.pk;
+      members = prev.members;
+      venues = prev.venues;
+      setBackupMessage('保存できなかったため、読み込みを中止しました。端末の保存容量が足りない可能性があります。' + UNCHANGED, '');
+      rerenderAll();
+      return;
+    }
+
+    // 控えのファイルで丸ごと戻した場合は、そのファイルがある＝その時点の控えはある、とみなす
+    if (mode === 'overwrite' && !isUndo && v.exportedAt && !isNaN(new Date(v.exportedAt).getTime())) {
+      const last = getLastBackupAt();
+      if (!last || new Date(v.exportedAt) > new Date(last)) setLastBackupAt(v.exportedAt);
+    }
+
+    const now = { mahjong: mjRecords, poker: pkRecords, members: members, venues: venues };
+    let msg;
+    if (isUndo) {
+      msg = `読み込む前の状態に戻しました。今は ${countsText(now)} です。`;
+    } else if (mode === 'merge') {
+      const skipped = merged.mahjong.skipped + merged.poker.skipped + merged.members.skipped + merged.venues.skipped;
+      msg = `今のデータに追加しました（麻雀 +${merged.mahjong.added}件・ポーカー +${merged.poker.added}件・メンバー +${merged.members.added}人・会場 +${merged.venues.added}件` +
+        (skipped > 0 ? `、すでにある${skipped}件は読み飛ばしました` : '') + `）。今は ${countsText(now)} です。`;
+    } else {
+      msg = `控えを読み込みました。今は ${countsText(now)} です。`;
+    }
+    setBackupMessage('', msg);
+    rerenderAll();
+  }
+
+  function rerenderAll() {
+    mjSelectedOpponents = new Set();
+    mjOpponentPoints = {};
+    mjSelectedVenue = null;
+    pkSelectedVenue = null;
+    renderMembers();
+    renderVenues();
+    renderMahjong();
+    renderPoker();
+    document.getElementById('opponent-stats-select').dispatchEvent(new Event('change'));
+    updateBackupStatus();
+  }
+
+  // 容量が足りないときにブラウザが自動でデータを消す対象から外してもらうよう頼む。
+  // 対応していないブラウザや断られた場合は何もしない（利用者自身が行う消去は防げない）。
+  function requestPersistentStorage() {
+    try {
+      if (navigator.storage && typeof navigator.storage.persist === 'function') {
+        navigator.storage.persist().catch(() => {});
+      }
+    } catch (e) {
+      // 何もしない
+    }
+  }
+
   sanitizeLoadedData();
   migrateDuplicateMemberIds();
   migrateRecordFields();
@@ -1767,6 +2275,8 @@
   renderVenues();
   renderMahjong();
   renderPoker();
+  updateBackupStatus();
+  requestPersistentStorage();
 </script>
 </body>
 </html>
